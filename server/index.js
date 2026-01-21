@@ -17,14 +17,23 @@ const app = express();
 // CORS 配置
 const corsOrigins = process.env.CORS_ORIGIN 
   ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000'];
+  : ['http://localhost:3000', 'http://localhost:5173'];
 
 const corsOptions = {
   origin: (origin, callback) => {
     // 允许无 origin 的请求（如移动端或 Postman）
-    if (!origin || corsOrigins.includes(origin)) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    // 检查是否在允许列表中，或者是 Vercel 预览部署
+    const isAllowed = corsOrigins.includes(origin) || 
+                      origin.endsWith('.vercel.app') ||
+                      origin.endsWith('.railway.app');
+    if (isAllowed) {
       callback(null, true);
     } else {
+      console.log('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -56,16 +65,37 @@ import userRoutes from './routes/userRoutes.js';
 import clothingRoutes from './routes/clothingRoutes.js';
 import outfitRoutes from './routes/outfitRoutes.js';
 import recommendationRoutes from './routes/recommendationRoutes.js';
+import tryonRoutes from './routes/tryonRoutes.js';
 
 // 使用路由
 app.use('/api/users', userRoutes);
 app.use('/api/clothing', clothingRoutes);
 app.use('/api/outfits', outfitRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/tryon', tryonRoutes);
 
 // 健康检查路由
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ message: 'Server is running' });
+app.get('/api/health', async (req, res) => {
+  try {
+    // 检查数据库连接
+    await db.authenticate();
+    
+    res.status(200).json({ 
+      status: 'healthy',
+      message: 'Server is running',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'connected'
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      message: 'Database connection failed',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      database: 'disconnected'
+    });
+  }
 });
 
 // 同步数据库

@@ -1,11 +1,12 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import Login from './Login.jsx';
 import { AuthProvider } from '../utils/AuthContext.jsx';
 import axios from 'axios';
+import { message } from 'antd';
 
-// 模拟axios.post
-export const mockedAxios = axios;
+// 模拟axios
 jest.mock('axios');
 
 // 封装渲染函数，包含必要的Provider
@@ -34,66 +35,97 @@ const renderWithMemoryRouter = (ui, { initialEntries = ['/'], ...options } = {})
 describe('Login Component', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // 清理 localStorage
+    window.localStorage.clear();
   });
 
-  it('should render Login component', () => {
-    renderWithProviders(<Login />);
-    expect(screen.getByRole('button', { name: /登\s*录/i })).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/邮箱/i)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/密码/i)).toBeInTheDocument();
+  it('should render Login component with all elements', async () => {
+    await act(async () => {
+      renderWithProviders(<Login />);
+    });
+    
+    // 检查登录按钮是否存在
+    expect(screen.getByRole('button', { name: /登录/i })).toBeInTheDocument();
+    // 检查邮箱输入框是否存在
+    expect(screen.getByPlaceholderText(/请输入您的邮箱/i)).toBeInTheDocument();
+    // 检查密码输入框是否存在
+    expect(screen.getByPlaceholderText(/请输入您的密码/i)).toBeInTheDocument();
   });
 
   it('should show validation error when email is empty', async () => {
-    renderWithProviders(<Login />);
+    const user = userEvent.setup();
     
-    const loginButton = screen.getByRole('button', { name: /登\s*录/i });
-    fireEvent.click(loginButton);
-    
-    // 验证表单验证错误是否触发
-    await waitFor(() => {
-      // 查找所有错误消息元素
-      const errorElements = screen.getAllByText(/\s*请输入\s*/i);
-      expect(errorElements.length).toBeGreaterThan(0);
+    await act(async () => {
+      renderWithProviders(<Login />);
     });
+    
+    const loginButton = screen.getByRole('button', { name: /登录/i });
+    
+    await act(async () => {
+      await user.click(loginButton);
+    });
+    
+    // 等待表单验证错误显示
+    await waitFor(() => {
+      expect(screen.getByText(/请输入邮箱/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it('should show validation error when password is empty', async () => {
-    renderWithProviders(<Login />);
+    const user = userEvent.setup();
     
-    const emailInput = screen.getByPlaceholderText(/邮箱/i);
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-    
-    const loginButton = screen.getByRole('button', { name: /登\s*录/i });
-    fireEvent.click(loginButton);
-    
-    // 验证表单验证错误是否触发
-    await waitFor(() => {
-      // 查找所有错误消息元素
-      const errorElements = screen.getAllByText(/\s*请输入\s*/i);
-      expect(errorElements.length).toBeGreaterThan(0);
+    await act(async () => {
+      renderWithProviders(<Login />);
     });
+    
+    const emailInput = screen.getByPlaceholderText(/请输入您的邮箱/i);
+    
+    await act(async () => {
+      await user.type(emailInput, 'test@example.com');
+    });
+    
+    const loginButton = screen.getByRole('button', { name: /登录/i });
+    
+    await act(async () => {
+      await user.click(loginButton);
+    });
+    
+    // 等待表单验证错误显示
+    await waitFor(() => {
+      expect(screen.getByText(/请输入密码/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it('should show validation error when email format is invalid', async () => {
-    renderWithProviders(<Login />);
+    const user = userEvent.setup();
     
-    const emailInput = screen.getByPlaceholderText(/邮箱/i);
-    fireEvent.change(emailInput, { target: { value: 'invalid-email' } });
-    
-    const loginButton = screen.getByRole('button', { name: /登\s*录/i });
-    fireEvent.click(loginButton);
-    
-    // 验证表单验证错误是否触发
-    await waitFor(() => {
-      // 查找所有错误消息元素
-      const errorElements = screen.getAllByText(/\s*邮箱\s*/i);
-      expect(errorElements.length).toBeGreaterThan(0);
+    await act(async () => {
+      renderWithProviders(<Login />);
     });
+    
+    const emailInput = screen.getByPlaceholderText(/请输入您的邮箱/i);
+    
+    await act(async () => {
+      await user.type(emailInput, 'invalid-email');
+    });
+    
+    const loginButton = screen.getByRole('button', { name: /登录/i });
+    
+    await act(async () => {
+      await user.click(loginButton);
+    });
+    
+    // 等待表单验证错误显示
+    await waitFor(() => {
+      expect(screen.getByText(/请输入有效的邮箱地址/i)).toBeInTheDocument();
+    }, { timeout: 3000 });
   });
 
   it('should call login API when form is submitted with valid data', async () => {
+    const user = userEvent.setup();
+    
     // 模拟登录成功响应
-    mockedAxios.post.mockResolvedValueOnce({
+    axios.post.mockResolvedValueOnce({
       data: {
         message: '登录成功',
         user: {
@@ -105,28 +137,37 @@ describe('Login Component', () => {
       }
     });
 
-    renderWithProviders(<Login />);
+    await act(async () => {
+      renderWithProviders(<Login />);
+    });
     
-    const emailInput = screen.getByPlaceholderText(/邮箱/i);
-    const passwordInput = screen.getByPlaceholderText(/密码/i);
-    const loginButton = screen.getByRole('button', { name: /登\s*录/i });
+    const emailInput = screen.getByPlaceholderText(/请输入您的邮箱/i);
+    const passwordInput = screen.getByPlaceholderText(/请输入您的密码/i);
+    const loginButton = screen.getByRole('button', { name: /登录/i });
     
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'password123' } });
-    fireEvent.click(loginButton);
+    await act(async () => {
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'password123');
+    });
+    
+    await act(async () => {
+      await user.click(loginButton);
+    });
     
     // 验证API调用
     await waitFor(() => {
-      expect(mockedAxios.post).toHaveBeenCalledWith(
+      expect(axios.post).toHaveBeenCalledWith(
         'http://localhost:5001/api/users/login',
         { email: 'test@example.com', password: 'password123' }
       );
-    });
+    }, { timeout: 3000 });
   });
 
   it('should show error message when login fails', async () => {
+    const user = userEvent.setup();
+    
     // 模拟登录失败响应
-    mockedAxios.post.mockRejectedValueOnce({
+    axios.post.mockRejectedValueOnce({
       response: {
         data: {
           message: '邮箱或密码错误'
@@ -134,28 +175,38 @@ describe('Login Component', () => {
       }
     });
 
-    renderWithProviders(<Login />);
-    
-    const emailInput = screen.getByPlaceholderText(/邮箱/i);
-    const passwordInput = screen.getByPlaceholderText(/密码/i);
-    const loginButton = screen.getByRole('button', { name: /登\s*录/i });
-    
-    fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
-    fireEvent.change(passwordInput, { target: { value: 'wrong-password' } });
-    fireEvent.click(loginButton);
-    
-    // 验证错误消息显示
-    await waitFor(() => {
-      expect(screen.getByText(/邮箱或密码错误/i)).toBeInTheDocument();
+    await act(async () => {
+      renderWithProviders(<Login />);
     });
+    
+    const emailInput = screen.getByPlaceholderText(/请输入您的邮箱/i);
+    const passwordInput = screen.getByPlaceholderText(/请输入您的密码/i);
+    const loginButton = screen.getByRole('button', { name: /登录/i });
+    
+    await act(async () => {
+      await user.type(emailInput, 'test@example.com');
+      await user.type(passwordInput, 'wrong-password');
+    });
+    
+    await act(async () => {
+      await user.click(loginButton);
+    });
+    
+    // 验证 message.error 被调用
+    await waitFor(() => {
+      expect(message.error).toHaveBeenCalledWith('邮箱或密码错误');
+    }, { timeout: 3000 });
   });
 
-  it('should navigate to register page when register link is clicked', () => {
-    renderWithMemoryRouter(<Login />, { initialEntries: ['/login'] });
+  it('should navigate to register page when register link is clicked', async () => {
+    await act(async () => {
+      renderWithMemoryRouter(<Login />, { initialEntries: ['/login'] });
+    });
     
-    const registerLink = screen.getByText(/没有账号/i).closest('a') || screen.getByRole('link', { name: /立即注册/i });
+    // 查找包含"立即注册"文本的链接
+    const registerLink = screen.getByText(/立即注册/i);
     
     // 验证链接的href属性是否正确
-    expect(registerLink).toHaveAttribute('href', '/register');
+    expect(registerLink.closest('a')).toHaveAttribute('href', '/register');
   });
 });

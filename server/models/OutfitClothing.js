@@ -2,21 +2,26 @@ import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
 
 const OutfitClothing = sequelize.define('OutfitClothing', {
+  id: {
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
+  },
   outfitId: {
     type: DataTypes.UUID,
+    allowNull: false,
     references: {
-      model: 'Outfit',
+      model: 'Outfits',
       key: 'id'
-    },
-    primaryKey: true
+    }
   },
   clothingId: {
     type: DataTypes.UUID,
+    allowNull: false,
     references: {
-      model: 'Clothing',
+      model: 'Clothings',
       key: 'id'
-    },
-    primaryKey: true
+    }
   },
   position: {
     type: DataTypes.STRING,
@@ -28,6 +33,13 @@ const OutfitClothing = sequelize.define('OutfitClothing', {
     allowNull: false,
     defaultValue: 0
   }
+}, {
+  indexes: [
+    {
+      unique: true,
+      fields: ['outfitId', 'clothingId']
+    }
+  ]
 });
 
 

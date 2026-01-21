@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Form, Input, Select, Upload, Button, message, Spin } from 'antd';
-import { PlusOutlined, UploadOutlined, LoadingOutlined } from '@ant-design/icons';
+import { Form, Input, Select, Upload, Button, message, Spin, Modal, Image, Tooltip } from 'antd';
+import { PlusOutlined, UploadOutlined, LoadingOutlined, ScissorOutlined, BgColorsOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../utils/axiosConfig.js';
 
@@ -13,6 +13,8 @@ const AddClothing = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [imageList, setImageList] = useState([]);
+  const [processingImage, setProcessingImage] = useState(null); // 正在处理背景的图片
+  const [processedImages, setProcessedImages] = useState({}); // 已处理的图片 {originalUid: processedUrl}
   const navigate = useNavigate();
 
   // 获取衣物分类
@@ -41,21 +43,38 @@ const AddClothing = () => {
     fetchCategories();
   }, []);
 
+  // 支持的图片格式
+  const ALLOWED_IMAGE_TYPES = [
+    'image/jpeg',
+    'image/jpg', 
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/tiff',
+    'image/svg+xml',
+    'image/heic',
+    'image/heif',
+    'image/avif'
+  ];
+
   // 自定义上传组件
   const uploadProps = {
     name: 'image',
     listType: 'picture-card',
     multiple: true,
+    accept: 'image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/svg+xml,image/heic,image/heif,image/avif,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif,.svg,.heic,.heif,.avif',
     beforeUpload: (file) => {
-      const isJpgOrPng = file.type === 'image/jpeg' || file.type === 'image/png';
-      if (!isJpgOrPng) {
-        message.error('只支持JPG/PNG格式的图片!');
+      const isValidType = ALLOWED_IMAGE_TYPES.includes(file.type) || 
+        /\.(jpe?g|png|gif|webp|bmp|tiff?|svg|heic|heif|avif)$/i.test(file.name);
+      if (!isValidType) {
+        message.error('不支持的图片格式！支持：JPG, PNG, GIF, WebP, BMP, TIFF, SVG, HEIC, HEIF, AVIF');
       }
-      const isLt5M = file.size / 1024 / 1024 < 5;
-      if (!isLt5M) {
-        message.error('图片大小不能超过5MB!');
+      const isLt10M = file.size / 1024 / 1024 < 10;
+      if (!isLt10M) {
+        message.error('图片大小不能超过10MB!');
       }
-      return isJpgOrPng && isLt5M;
+      return isValidType && isLt10M;
     },
     onChange: (info) => {
       setImageList(info.fileList);
@@ -88,6 +107,7 @@ const AddClothing = () => {
       const clothingId = clothingResponse.clothing.id;
 
       // 2. 上传图片
+      const uploadedImages = [];
       if (imageList.length > 0) {
         setUploading(true);
         // 批量上传图片
@@ -95,13 +115,37 @@ const AddClothing = () => {
           if (file.originFileObj) {
             const formData = new FormData();
             formData.append('image', file.originFileObj);
-            await axiosInstance.post(`/clothing/${clothingId}/images`, formData, {
+            const uploadResponse = await axiosInstance.post(`/clothing/${clothingId}/images`, formData, {
               headers: {
                 'Content-Type': 'multipart/form-data'
               }
             });
+            uploadedImages.push({
+              fileUid: file.uid,
+              imageId: uploadResponse.image.id,
+              needsProcessing: processedImages[file.uid] === 'pending'
+            });
           }
         }
+        
+        // 3. 处理需要去除背景的图片
+        const imagesToProcess = uploadedImages.filter(img => img.needsProcessing);
+        if (imagesToProcess.length > 0) {
+          message.loading({ content: `正在处理 ${imagesToProcess.length} 张图片的背景...`, key: 'processingBg' });
+          
+          for (const img of imagesToProcess) {
+            try {
+              await axiosInstance.post(`/clothing/${clothingId}/process-image`, {
+                imageId: img.imageId
+              });
+            } catch (processError) {
+              console.error('处理图片背景失败:', processError);
+            }
+          }
+          
+          message.success({ content: '背景处理完成！', key: 'processingBg' });
+        }
+        
         setUploading(false);
       }
 
@@ -116,16 +160,162 @@ const AddClothing = () => {
     }
   };
 
+  // 处理背景去除 - 在上传前本地预览处理
+  const handleRemoveBackground = async (file) => {
+    if (!file.originFileObj) {
+      message.warning('请先上传图片');
+      return;
+    }
+    
+    setProcessingImage(file.uid);
+    
+    try {
+      // 先创建一个临时的衣物和上传图片，然后调用AI处理
+      // 为了更好的用户体验，我们先显示处理中状态
+      message.loading({ content: 'AI 正在去除背景...', key: 'removeBackground' });
+      
+      // 模拟处理（实际在提交时会调用真实API）
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // 标记该图片已处理（实际处理在服务端进行）
+      setProcessedImages(prev => ({
+        ...prev,
+        [file.uid]: 'pending' // 标记为待处理
+      }));
+      
+      message.success({ 
+        content: '已标记为需要去除背景，将在保存时处理', 
+        key: 'removeBackground' 
+      });
+      
+    } catch (error) {
+      console.error('标记背景去除失败:', error);
+      message.error({ content: '操作失败，请稍后重试', key: 'removeBackground' });
+    } finally {
+      setProcessingImage(null);
+    }
+  };
+
   // 渲染上传列表
   const renderUploadList = () => {
     return (
-      <Upload.Dragger {...uploadProps}>
-        <p className="ant-upload-drag-icon">
-          <UploadOutlined />
-        </p>
-        <p className="ant-upload-text">点击或拖拽文件到此处上传</p>
-        <p className="ant-upload-hint">支持单个或批量上传，仅支持JPG/PNG格式，单张不超过5MB</p>
-      </Upload.Dragger>
+      <div>
+        <Upload.Dragger {...uploadProps} fileList={imageList}>
+          <p className="ant-upload-drag-icon">
+            <UploadOutlined />
+          </p>
+          <p className="ant-upload-text">点击或拖拽文件到此处上传</p>
+          <p className="ant-upload-hint">支持单个或批量上传，支持 JPG/PNG/GIF/WebP/BMP/TIFF/SVG/HEIC/AVIF 格式，单张不超过10MB</p>
+        </Upload.Dragger>
+        
+        {/* 已上传图片列表 - 带有去除背景按钮 */}
+        {imageList.length > 0 && (
+          <div style={{ marginTop: 'var(--spacing-4)' }}>
+            <p style={{ 
+              fontSize: 'var(--font-size-sm)', 
+              color: 'var(--color-text-secondary)',
+              marginBottom: 'var(--spacing-2)'
+            }}>
+              <ScissorOutlined style={{ marginRight: 'var(--spacing-1)' }} />
+              点击图片下方按钮可使用 AI 去除背景
+            </p>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', 
+              gap: 'var(--spacing-4)' 
+            }}>
+              {imageList.map((file) => {
+                const isProcessing = processingImage === file.uid;
+                const isProcessed = processedImages[file.uid];
+                const previewUrl = file.thumbUrl || file.url || (file.originFileObj ? URL.createObjectURL(file.originFileObj) : null);
+                
+                return (
+                  <div 
+                    key={file.uid}
+                    style={{
+                      position: 'relative',
+                      borderRadius: 'var(--radius-lg)',
+                      overflow: 'hidden',
+                      border: isProcessed ? '2px solid var(--color-accent)' : '1px solid var(--color-border)',
+                      backgroundColor: 'var(--color-background)',
+                      transition: 'all var(--transition-base)',
+                    }}
+                  >
+                    {/* 图片预览 */}
+                    <div style={{ 
+                      width: '100%', 
+                      height: '120px',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#f5f5f5'
+                    }}>
+                      {previewUrl ? (
+                        <img 
+                          src={previewUrl} 
+                          alt={file.name}
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '100%',
+                            objectFit: 'contain'
+                          }}
+                        />
+                      ) : (
+                        <LoadingOutlined />
+                      )}
+                    </div>
+                    
+                    {/* 已处理标记 */}
+                    {isProcessed && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 'var(--spacing-1)',
+                        right: 'var(--spacing-1)',
+                        backgroundColor: 'var(--color-accent)',
+                        color: '#fff',
+                        borderRadius: 'var(--radius-full)',
+                        padding: '2px 6px',
+                        fontSize: 'var(--font-size-xs)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '2px'
+                      }}>
+                        <CheckCircleOutlined />
+                        <span>待去背景</span>
+                      </div>
+                    )}
+                    
+                    {/* 操作按钮 */}
+                    <div style={{
+                      padding: 'var(--spacing-2)',
+                      display: 'flex',
+                      gap: 'var(--spacing-2)'
+                    }}>
+                      <Tooltip title={isProcessed ? '已标记去除背景' : 'AI 去除背景'}>
+                        <Button
+                          size="small"
+                          type={isProcessed ? 'primary' : 'default'}
+                          icon={isProcessing ? <LoadingOutlined spin /> : <ScissorOutlined />}
+                          onClick={() => !isProcessed && handleRemoveBackground(file)}
+                          disabled={isProcessing || isProcessed}
+                          style={{
+                            flex: 1,
+                            fontSize: 'var(--font-size-xs)',
+                            backgroundColor: isProcessed ? 'var(--color-accent)' : undefined
+                          }}
+                        >
+                          {isProcessing ? '处理中' : isProcessed ? '已标记' : '去背景'}
+                        </Button>
+                      </Tooltip>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 

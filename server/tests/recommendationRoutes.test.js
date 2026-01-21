@@ -202,4 +202,105 @@ describe('Recommendation Routes', () => {
       expect(response.body.message).toBe('未提供认证令牌');
     });
   });
+
+  // 测试 AI 智能自然语言推荐
+  describe('POST /api/recommendations/nlp', () => {
+    it('should get AI recommendations from natural language (mock mode)', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          description: '我想找一件适合职场穿的休闲衬衫',
+          type: 'clothing',
+          limit: 10
+        })
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body).toHaveProperty('data');
+      expect(response.body.data).toHaveProperty('recommendations');
+      expect(response.body.data).toHaveProperty('parsedResult');
+      expect(response.body.data).toHaveProperty('suggestions');
+      expect(Array.isArray(response.body.data.recommendations)).toBe(true);
+      expect(Array.isArray(response.body.data.suggestions)).toBe(true);
+    });
+
+    it('should parse keywords correctly', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          description: '夏季休闲约会穿搭',
+          type: 'outfit'
+        })
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('success', true);
+      const parsedResult = response.body.data.parsedResult;
+      // 验证解析结果包含关键词
+      expect(parsedResult).toHaveProperty('season');
+      expect(parsedResult).toHaveProperty('occasion');
+      expect(parsedResult).toHaveProperty('style');
+    });
+
+    it('should return error without description', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          type: 'clothing'
+        })
+        .expect('Content-Type', /json/)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('success', false);
+      expect(response.body.message).toBe('请提供描述信息');
+    });
+
+    it('should return error with empty description', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          description: '   ',
+          type: 'clothing'
+        })
+        .expect('Content-Type', /json/)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('success', false);
+      expect(response.body.message).toBe('请提供描述信息');
+    });
+
+    it('should not get AI recommendations without authentication', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .send({
+          description: '休闲上衣推荐',
+          type: 'clothing'
+        })
+        .expect('Content-Type', /json/)
+        .expect(401);
+
+      expect(response.body.message).toBe('未提供认证令牌');
+    });
+
+    it('should return isMock flag in response', async () => {
+      const response = await request(app)
+        .post('/api/recommendations/nlp')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          description: '冬季正式穿搭',
+          type: 'clothing'
+        })
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body.data).toHaveProperty('isMock');
+      // isMock 值取决于 API Key 配置，只需要验证字段存在且为布尔值
+      expect(typeof response.body.data.isMock).toBe('boolean');
+    });
+  });
 });

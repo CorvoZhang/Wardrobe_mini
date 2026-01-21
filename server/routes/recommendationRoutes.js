@@ -1,9 +1,11 @@
 import express from 'express';
 import { Op } from 'sequelize';
 import Clothing from '../models/Clothing.js';
+import ClothingImage from '../models/ClothingImage.js';
 import Outfit from '../models/Outfit.js';
 import OutfitClothing from '../models/OutfitClothing.js';
 import { authenticate } from '../middleware/auth.js';
+import { parseNaturalLanguage } from '../services/aiService.js';
 
 const router = express.Router();
 
@@ -117,7 +119,7 @@ router.post('/complete-outfit', authenticate, async (req, res) => {
   }
 });
 
-// 基于自然语言描述获取推荐
+// 基于自然语言描述获取推荐（简单版本 - 保留向后兼容）
 router.post('/natural-language', authenticate, async (req, res) => {
   try {
     const { description, type = 'outfit' } = req.body;
@@ -208,6 +210,143 @@ router.post('/natural-language', authenticate, async (req, res) => {
   } catch (error) {
     console.error('自然语言推荐失败:', error);
     res.status(500).json({ message: '自然语言推荐失败，请稍后重试' });
+  }
+});
+
+// AI 智能自然语言解析与推荐
+router.post('/nlp', authenticate, async (req, res) => {
+  try {
+    const { description, type = 'clothing', limit = 10 } = req.body;
+    
+    if (!description || description.trim().length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: '请提供描述信息' 
+      });
+    }
+    
+    // 调用 AI 服务解析自然语言
+    const nlpResult = await parseNaturalLanguage(description);
+    
+    if (!nlpResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: nlpResult.message || '自然语言解析失败'
+      });
+    }
+    
+    const { parsedResult, suggestions, confidence, isMock } = nlpResult;
+    
+    let recommendations = [];
+    
+    if (type === 'outfit') {
+      // 获取穿搭推荐
+      const whereClause = { userId: req.user.id };
+      
+      if (parsedResult.season) {
+        whereClause.season = { [Op.like]: `%${parsedResult.season}%` };
+      }
+      if (parsedResult.occasion) {
+        whereClause.occasion = { [Op.like]: `%${parsedResult.occasion}%` };
+      }
+      
+      recommendations = await Outfit.findAll({
+        where: whereClause,
+        include: [
+          {
+            model: Clothing,
+            as: 'clothing',
+            through: { 
+              model: OutfitClothing,
+              attributes: ['position', 'order'] 
+            },
+            attributes: ['id', 'name', 'categoryId'],
+            include: [{
+              model: ClothingImage,
+              as: 'images',
+              attributes: ['id', 'imageUrl', 'imageType']
+            }]
+          }
+        ],
+        order: [['createdAt', 'DESC']],
+        limit: parseInt(limit)
+      });
+      
+    } else {
+      // 获取衣物推荐
+      const whereClause = { userId: req.user.id };
+      
+      // 构建模糊匹配条件
+      const orConditions = [];
+      
+      if (parsedResult.style) {
+        orConditions.push({ style: { [Op.like]: `%${parsedResult.style}%` } });
+      }
+      if (parsedResult.season) {
+        orConditions.push({ season: { [Op.like]: `%${parsedResult.season}%` } });
+      }
+      if (parsedResult.color) {
+        orConditions.push({ color: { [Op.like]: `%${parsedResult.color}%` } });
+      }
+      if (parsedResult.category) {
+        orConditions.push({ name: { [Op.like]: `%${parsedResult.category}%` } });
+      }
+      
+      // 如果有匹配条件，使用 OR 查询
+      if (orConditions.length > 0) {
+        whereClause[Op.or] = orConditions;
+      }
+      
+      recommendations = await Clothing.findAll({
+        where: whereClause,
+        include: [{
+          model: ClothingImage,
+          as: 'images',
+          attributes: ['id', 'imageUrl', 'imageType']
+        }],
+        order: [['createdAt', 'DESC']],
+        limit: parseInt(limit)
+      });
+      
+      // 如果匹配结果太少，补充一些最新的衣物
+      if (recommendations.length < 3) {
+        const existingIds = recommendations.map(r => r.id);
+        const additionalItems = await Clothing.findAll({
+          where: {
+            userId: req.user.id,
+            id: { [Op.notIn]: existingIds }
+          },
+          include: [{
+            model: ClothingImage,
+            as: 'images',
+            attributes: ['id', 'imageUrl', 'imageType']
+          }],
+          order: [['createdAt', 'DESC']],
+          limit: parseInt(limit) - recommendations.length
+        });
+        recommendations = [...recommendations, ...additionalItems];
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: isMock ? 'AI 智能推荐完成（Mock 模式）' : 'AI 智能推荐完成',
+      data: {
+        recommendations,
+        parsedResult,
+        suggestions,
+        confidence,
+        isMock,
+        originalDescription: description
+      }
+    });
+    
+  } catch (error) {
+    console.error('AI 智能推荐失败:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'AI 智能推荐失败，请稍后重试' 
+    });
   }
 });
 

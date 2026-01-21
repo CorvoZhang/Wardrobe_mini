@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 // 加载环境变量
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +10,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 import sequelize from '../config/database.js';
 import ClothingCategory from '../models/ClothingCategory.js';
+import User from '../models/User.js';
 
 // 衣物分类数据
 const categories = [
@@ -62,15 +64,31 @@ async function seedDatabase() {
     console.log('✅ 数据库同步完成');
     
     // 检查是否已有分类数据
-    const existingCount = await ClothingCategory.count();
+    const existingCategoryCount = await ClothingCategory.count();
     
-    if (existingCount > 0) {
-      console.log(`ℹ️  数据库中已存在 ${existingCount} 个分类，跳过初始化`);
-      console.log('   如需重新初始化，请先清空 ClothingCategories 表');
+    if (existingCategoryCount > 0) {
+      console.log(`ℹ️  数据库中已存在 ${existingCategoryCount} 个分类，跳过分类初始化`);
     } else {
       // 创建分类数据
       await ClothingCategory.bulkCreate(categories);
       console.log(`✅ 成功创建 ${categories.length} 个衣物分类`);
+    }
+    
+    // 创建测试用户（用于 E2E 测试）
+    const testUserEmail = 'test@example.com';
+    const existingTestUser = await User.findOne({ where: { email: testUserEmail } });
+    
+    if (existingTestUser) {
+      console.log(`ℹ️  测试用户 ${testUserEmail} 已存在，跳过创建`);
+    } else {
+      const hashedPassword = await bcrypt.hash('password123', 10);
+      await User.create({
+        email: testUserEmail,
+        password_hash: hashedPassword,
+        name: '测试用户',
+        phone: '1234567890'
+      });
+      console.log(`✅ 成功创建测试用户 ${testUserEmail}`);
     }
     
     console.log('🎉 数据初始化完成！');

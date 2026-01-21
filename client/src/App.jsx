@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Outlet, useNavigate } from 'react-router-dom';
-import { UserOutlined, AppstoreOutlined, BorderOutlined, ShoppingOutlined, BgColorsOutlined } from '@ant-design/icons';
+import { UserOutlined, AppstoreOutlined, BorderOutlined, ShoppingOutlined, BgColorsOutlined, CameraOutlined } from '@ant-design/icons';
 import './App.css';
 import { useAuth } from './utils/AuthContext.jsx';
 import { useTheme } from './utils/ThemeContext.jsx';
@@ -15,6 +15,8 @@ import Outfits from './pages/Outfits';
 import OutfitDetail from './pages/OutfitDetail';
 import AddOutfit from './pages/AddOutfit';
 import Recommendations from './pages/Recommendations';
+import TryOn from './pages/TryOn';
+import SharedOutfit from './pages/SharedOutfit';
 
 function App() {
   return (
@@ -23,6 +25,7 @@ function App() {
         {/* 公共路由 */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/shared/outfit/:shareCode" element={<SharedOutfit />} />
         
         {/* 主应用路由 */}
         <Route path="/" element={<MainLayout />}>
@@ -34,6 +37,7 @@ function App() {
           <Route path="outfits/create" element={<AddOutfit />} />
           <Route path="outfit/:id" element={<OutfitDetail />} />
           <Route path="recommendations" element={<Recommendations />} />
+          <Route path="tryon" element={<TryOn />} />
         </Route>
       </Routes>
     </Router>
@@ -140,7 +144,8 @@ function MainLayout() {
                   { key: '1', label: '个人中心', path: '/', icon: <UserOutlined /> },
                   { key: '2', label: '我的衣橱', path: '/closet', icon: <AppstoreOutlined /> },
                   { key: '3', label: '我的穿搭', path: '/outfits', icon: <BorderOutlined /> },
-                  { key: '4', label: '智能推荐', path: '/recommendations', icon: <ShoppingOutlined /> },
+                  { key: '4', label: '虚拟试穿', path: '/tryon', icon: <CameraOutlined /> },
+                  { key: '5', label: '智能推荐', path: '/recommendations', icon: <ShoppingOutlined /> },
                 ].map(item => {
                   const isActive = window.location.pathname === item.path;
                   return (
@@ -338,6 +343,7 @@ function MainLayout() {
                 { label: '个人中心', path: '/' },
                 { label: '我的衣橱', path: '/closet' },
                 { label: '我的穿搭', path: '/outfits' },
+                { label: '虚拟试穿', path: '/tryon' },
                 { label: '智能推荐', path: '/recommendations' },
               ].map((item, index) => (
                 <li key={index} style={{ marginBottom: 'var(--spacing-3)' }}>

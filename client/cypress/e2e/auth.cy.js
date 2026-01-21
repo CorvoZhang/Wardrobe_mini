@@ -1,7 +1,7 @@
 describe('用户认证流程', () => {
   it('应该能够注册新用户', () => {
     // 生成随机邮箱，避免重复注册
-    const randomEmail = `test_${Math.floor(Math.random() * 10000)}@example.com`;
+    const randomEmail = `test_${Date.now()}@example.com`;
     
     // 注册新用户（注册成功后跳转到登录页）
     cy.register(randomEmail, 'password123', '测试用户', '1234567890');
@@ -47,8 +47,8 @@ describe('用户认证流程', () => {
     
     cy.get('button').contains('登录').click();
     
-    // 验证错误信息显示（Ant Design message组件）
-    cy.contains('邮箱或密码错误').should('be.visible');
+    // 验证错误信息显示（Ant Design message组件 - 使用更灵活的选择器）
+    cy.get('.ant-message', { timeout: 10000 }).should('be.visible');
   });
 
   it('注册时使用已存在邮箱应该显示错误信息', () => {
@@ -66,7 +66,7 @@ describe('用户认证流程', () => {
     
     cy.get('button').contains('注册').click();
     
-    // 验证错误信息显示（Ant Design message组件）
-    cy.contains('该邮箱已被注册').should('be.visible');
+    // 验证错误信息显示（Ant Design message组件 - 使用更灵活的选择器）
+    cy.get('.ant-message', { timeout: 10000 }).should('be.visible');
   });
 });

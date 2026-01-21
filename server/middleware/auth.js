@@ -1,7 +1,21 @@
 import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
 
-// JWT密钥，实际项目中应使用环境变量
-const JWT_SECRET = 'your-secret-key-change-me-in-production';
+dotenv.config();
+
+// JWT 密钥 - 生产环境必须通过环境变量配置
+// 开发环境使用默认值，生产环境如果未配置会报错
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
+
+// 生产环境检查
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('❌ 错误: 生产环境必须配置 JWT_SECRET 环境变量');
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.log('⚠️ JWT_SECRET 未配置，使用开发环境默认值（仅限本地开发）');
+}
 
 // 认证中间件
 export const authenticate = (req, res, next) => {

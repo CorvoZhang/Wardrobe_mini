@@ -3,10 +3,19 @@ import axios from 'axios';
 // 从环境变量获取 API 地址，提供默认值用于本地开发
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
+// 判断是否为生产环境
+const isProduction = import.meta.env.PROD;
+
+// 生产环境日志
+if (isProduction) {
+  console.log('🚀 Production mode - API URL:', API_URL);
+}
+
 // 创建axios实例
+// 生产环境使用更长的超时时间（AI 服务可能需要较长时间）
 const axiosInstance = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: isProduction ? 60000 : 30000, // 生产环境 60s，开发环境 30s
 });
 
 // 请求拦截器

@@ -29,6 +29,22 @@ const Clothing = sequelize.define('Clothing', {
     },
     allowNull: false
   },
+  style: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  season: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  color: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  brand: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   createdAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW

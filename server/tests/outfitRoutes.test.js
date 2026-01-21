@@ -286,4 +286,210 @@ describe('Outfit Routes', () => {
       expect(response.body.outfitClothing.clothingId).toBe(testClothing.id);
     });
   });
+
+  // 测试生成分享链接
+  describe('POST /api/outfits/:id/share', () => {
+    it('should generate share link', async () => {
+      // 创建测试穿搭
+      const outfit = await Outfit.create({
+        userId: testUser.id,
+        name: '分享测试穿搭',
+        description: '用于测试分享功能',
+        occasion: '日常',
+        season: '春季'
+      });
+
+      const response = await request(app)
+        .post(`/api/outfits/${outfit.id}/share`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({
+          expiresInDays: 7
+        })
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body).toHaveProperty('data');
+      expect(response.body.data).toHaveProperty('shareCode');
+      expect(response.body.data).toHaveProperty('shareUrl');
+      expect(response.body.data).toHaveProperty('expiresAt');
+      expect(response.body.data.shareCode).toHaveLength(16); // 8 bytes = 16 hex chars
+    });
+
+    it('should return 404 for non-existent outfit', async () => {
+      const response = await request(app)
+        .post('/api/outfits/00000000-0000-0000-0000-000000000000/share')
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({})
+        .expect('Content-Type', /json/)
+        .expect(404);
+
+      expect(response.body).toHaveProperty('success', false);
+      expect(response.body.message).toBe('穿搭方案不存在');
+    });
+
+    it('should not share without authentication', async () => {
+      const outfit = await Outfit.create({
+        userId: testUser.id,
+        name: '分享测试穿搭2',
+        description: '用于测试分享功能',
+        occasion: '日常',
+        season: '春季'
+      });
+
+      const response = await request(app)
+        .post(`/api/outfits/${outfit.id}/share`)
+        .send({})
+        .expect('Content-Type', /json/)
+        .expect(401);
+
+      expect(response.body.message).toBe('未提供认证令牌');
+    });
+  });
+
+  // 测试获取分享的穿搭（公开接口）
+  describe('GET /api/outfits/shared/:shareCode', () => {
+    it('should get shared outfit without authentication', async () => {
+      // 创建测试穿搭
+      const outfit = await Outfit.create({
+        userId: testUser.id,
+        name: '公开分享穿搭',
+        description: '用于测试公开获取',
+        occasion: '约会',
+        season: '夏季'
+      });
+
+      // 添加衣物到穿搭
+      await OutfitClothing.create({
+        outfitId: outfit.id,
+        clothingId: testClothing.id
+      });
+
+      // 先生成分享链接
+      const shareResponse = await request(app)
+        .post(`/api/outfits/${outfit.id}/share`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ expiresInDays: 7 })
+        .expect(200);
+
+      const shareCode = shareResponse.body.data.shareCode;
+
+      // 无需认证获取分享的穿搭
+      const response = await request(app)
+        .get(`/api/outfits/shared/${shareCode}`)
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body).toHaveProperty('data');
+      expect(response.body.data).toHaveProperty('outfit');
+      expect(response.body.data).toHaveProperty('sharedBy');
+      expect(response.body.data).toHaveProperty('viewCount');
+      expect(response.body.data.outfit.name).toBe('公开分享穿搭');
+    });
+
+    it('should return 404 for invalid share code', async () => {
+      const response = await request(app)
+        .get('/api/outfits/shared/invalidcode123456')
+        .expect('Content-Type', /json/)
+        .expect(404);
+
+      expect(response.body).toHaveProperty('success', false);
+      expect(response.body.message).toBe('分享链接不存在或已失效');
+    });
+
+    it('should increment view count on each access', async () => {
+      // 创建测试穿搭
+      const outfit = await Outfit.create({
+        userId: testUser.id,
+        name: '浏览量测试穿搭',
+        description: '测试浏览量',
+        occasion: '日常',
+        season: '春季'
+      });
+
+      // 生成分享链接
+      const shareResponse = await request(app)
+        .post(`/api/outfits/${outfit.id}/share`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ expiresInDays: 7 })
+        .expect(200);
+
+      const shareCode = shareResponse.body.data.shareCode;
+
+      // 第一次访问
+      const response1 = await request(app)
+        .get(`/api/outfits/shared/${shareCode}`)
+        .expect(200);
+
+      expect(response1.body.data.viewCount).toBe(1);
+
+      // 第二次访问
+      const response2 = await request(app)
+        .get(`/api/outfits/shared/${shareCode}`)
+        .expect(200);
+
+      expect(response2.body.data.viewCount).toBe(2);
+    });
+  });
+
+  // 测试删除分享链接
+  describe('DELETE /api/outfits/share/:shareCode', () => {
+    it('should delete share link', async () => {
+      // 创建测试穿搭
+      const outfit = await Outfit.create({
+        userId: testUser.id,
+        name: '删除分享测试',
+        description: '测试删除分享',
+        occasion: '日常',
+        season: '春季'
+      });
+
+      // 生成分享链接
+      const shareResponse = await request(app)
+        .post(`/api/outfits/${outfit.id}/share`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .send({ expiresInDays: 7 })
+        .expect(200);
+
+      const shareCode = shareResponse.body.data.shareCode;
+
+      // 删除分享链接
+      const response = await request(app)
+        .delete(`/api/outfits/share/${shareCode}`)
+        .set('Authorization', `Bearer ${testToken}`)
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('success', true);
+      expect(response.body.message).toBe('分享链接已删除');
+
+      // 验证分享链接已失效
+      const getResponse = await request(app)
+        .get(`/api/outfits/shared/${shareCode}`)
+        .expect(404);
+
+      expect(getResponse.body.message).toBe('分享链接不存在或已失效');
+    });
+
+    it('should return 404 for non-existent share code', async () => {
+      const response = await request(app)
+        .delete('/api/outfits/share/nonexistentcode1')
+        .set('Authorization', `Bearer ${testToken}`)
+        .expect('Content-Type', /json/)
+        .expect(404);
+
+      expect(response.body).toHaveProperty('success', false);
+      expect(response.body.message).toBe('分享链接不存在');
+    });
+
+    it('should not delete without authentication', async () => {
+      const response = await request(app)
+        .delete('/api/outfits/share/anycode12345678')
+        .expect('Content-Type', /json/)
+        .expect(401);
+
+      expect(response.body.message).toBe('未提供认证令牌');
+    });
+  });
 });
