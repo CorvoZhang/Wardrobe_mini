@@ -10,20 +10,12 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-// 获取 API 基础地址，根据当前环境动态确定
-// 生产环境使用 window.location.origin，开发环境使用本地服务器
-const getApiBaseUrl = () => {
-  // 开发环境使用固定地址
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://localhost:5001/api';
-  }
-  // 生产环境使用相对路径或配置的后端地址
-  return '/api';
-};
+// 获取 API 基础地址，从环境变量读取
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 // 创建一个不带认证的 axios 实例
 const publicAxios = axios.create({
-  baseURL: getApiBaseUrl(),
+  baseURL: API_URL,
   timeout: 30000,
 });
 

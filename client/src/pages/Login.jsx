@@ -3,7 +3,7 @@ import { Form, Input, Button, message } from 'antd';
 import { LoginOutlined, UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../utils/AuthContext.jsx';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -14,11 +14,11 @@ const Login = () => {
     setLoading(true);
     try {
       // 调用登录API
-      const response = await axios.post('http://localhost:5001/api/users/login', values);
-      message.success(response.data.message || '登录成功');
+      const response = await axios.post('/users/login', values);
+      message.success(response.message || '登录成功');
       // 使用AuthContext的login函数保存认证信息
-      if (response.data.token) {
-        login(response.data.user, response.data.token);
+      if (response.token) {
+        login(response.user, response.token);
       }
       navigate('/');
     } catch (error) {

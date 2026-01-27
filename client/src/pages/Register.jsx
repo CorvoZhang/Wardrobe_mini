@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Form, Input, Button, message } from 'antd';
 import { UserAddOutlined, UserOutlined, LockOutlined, MailOutlined, PhoneOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 
 const Register = () => {
   const [loading, setLoading] = useState(false);
@@ -12,8 +12,8 @@ const Register = () => {
     setLoading(true);
     try {
       // 调用注册API
-      const response = await axios.post('http://localhost:5001/api/users/register', values);
-      message.success(response.data.message || '注册成功，请登录');
+      const response = await axios.post('/users/register', values);
+      message.success(response.message || '注册成功，请登录');
       navigate('/login');
     } catch (error) {
       message.error(error.response?.data?.message || '注册失败，请稍后重试');
